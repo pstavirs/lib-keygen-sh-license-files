@@ -1,0 +1,3 @@
+Name: keygenlic
+Description: Validate Keygen.sh license files
+Libs: -L. -lssl -lcrypto
