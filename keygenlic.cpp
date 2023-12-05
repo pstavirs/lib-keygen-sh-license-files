@@ -70,6 +70,8 @@ inline std::string colorize(const std::string str, const int color_code)
   stream << "m";
   stream << str;
   stream << "\033[0m";
+#else
+  stream << str;
 #endif
 
   return stream.str();
