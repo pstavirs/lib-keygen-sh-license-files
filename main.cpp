@@ -64,11 +64,13 @@ inline std::string colorize(const std::string str, const int color_code)
 {
   std::stringstream stream;
 
+#if 0
   stream << "\033[1;";
   stream << color_code;
   stream << "m";
   stream << str;
   stream << "\033[0m";
+#endif
 
   return stream.str();
 }
@@ -208,10 +210,6 @@ license_file import_license_file(const std::string path)
 
   std::string machine_prefix = "-----BEGIN MACHINE FILE-----\n";
   lic.typ = enc.find(machine_prefix) == 0 ? machine_type : license_type;
-  std::cout << colorize("[INFO]", 34) << " "
-              << "File Type is "
-              << (lic.typ == machine_type ?  "machine" : "license")
-              << std::endl;
 
   // Decode contents
   auto dec = decode_license_file(enc);
@@ -568,6 +566,157 @@ machine parse_machine(const std::string dec)
   return mach;
 }
 
+// verify_license validates the license passed file contains a valid lincense
+// issue/expiry dates are explicitly checked and license key is implicitly
+// checked; any other validation must be performed by caller using the OUT
+// param json for the license file (returned as a json string)
+int verify_license(
+        std::string filename,
+        std::string pubkey,
+        std::string lickey,
+        std::string *json)
+{
+  std::string path = filename;
+  std::string secret = lickey;
+
+  auto lic = import_license_file(path);
+  if (is_empty<license_file>(lic))
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Path '" << path << "' is not a valid license file"
+              << std::endl;
+
+    return 1;
+  }
+
+  // Verify the license file signature
+  auto ok = verify_license_file(pubkey, lic);
+  if (!ok)
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "License file signature is not valid!"
+              << std::endl;
+
+    return 1;
+  }
+
+  // Verify license type
+  if (lic.typ == machine_type)
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Path '" << path << "' is machine, not license file"
+              << std::endl;
+
+    return 1;
+  }
+
+  // Decrypt the license file
+  auto dec = decrypt_license_file(secret, lic);
+  if (dec.empty() || dec.at(0) != '{')
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Failed to decrypt license file!"
+              << std::endl;
+
+    return 1;
+  }
+
+  auto lcs = parse_license(dec);
+  if (is_empty<license>(lcs))
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Failed to parse license!"
+              << std::endl;
+
+    return 1;
+  }
+
+  if (json)
+  {
+    *json = dec;
+  }
+
+  return 0;
+}
+
+// verify_machine validates the license passed file contains a valid machine;
+// issue/expiry dates are explicitly checked and license key and machine
+// fingerprint is implicitly checked; any other validation must be performed
+// by caller using the OUT param json for the license file (returned as a
+// json string)
+int verify_machine(
+        std::string filename,
+        std::string pubkey,
+        std::string lickey,
+        std::string fingerprint,
+        std::string *json)
+{
+  std::string path = filename;
+  std::string secret = lickey;
+
+  auto lic = import_license_file(path);
+  if (is_empty<license_file>(lic))
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Path '" << path << "' is not a valid license file"
+              << std::endl;
+
+    return 1;
+  }
+
+  // Verify the license file signature
+  auto ok = verify_license_file(pubkey, lic);
+  if (!ok)
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "License file signature is not valid!"
+              << std::endl;
+
+    return 1;
+  }
+
+  // Verify license type
+  if (lic.typ == license_type)
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Path '" << path << "' is license, not machine file"
+              << std::endl;
+
+    return 1;
+  }
+
+  // Add fingerpint to decryption secret
+  secret += fingerprint;
+
+  // Decrypt the license file
+  auto dec = decrypt_license_file(secret, lic);
+  if (dec.empty() || dec.at(0) != '{')
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Failed to decrypt license file!"
+              << std::endl;
+
+    return 1;
+  }
+
+  auto mach = parse_machine(dec);
+  if (is_empty<machine>(mach))
+  {
+    std::cerr << colorize("[ERROR]", 31) << " "
+              << "Failed to parse machine license!"
+              << std::endl;
+
+    return 1;
+  }
+
+  if (json)
+  {
+    *json = dec;
+  }
+
+  return 0;
+}
+
 // main runs the example program.
 int main(int argc, char* argv[])
 {
@@ -606,164 +755,20 @@ int main(int argc, char* argv[])
               << "Importing..."
               << std::endl;
 
-  auto lic = import_license_file(path);
-  if (is_empty<license_file>(lic))
+  std::string json;
+  int ok = getenv("KEYGEN_MACHINE_FINGERPRINT") ?
+      verify_machine(path, pubkey, secret, getenv("KEYGEN_MACHINE_FINGERPRINT"), &json) :
+      verify_license(path, pubkey, secret, &json);
+
+  if (ok == 0)
   {
-    std::cerr << colorize("[ERROR]", 31) << " "
-              << "Path '" << path << "' is not a valid license file"
+    std::cout << "Lincense validated successfully!"
+              << json
               << std::endl;
-
-    return 1;
-  }
-
-  std::cout << colorize("[OK]", 32) << " "
-            << "License file successfully imported!" << std::endl;
-
-  std::cout << colorize("[INFO]", 34) << " "
-              << "Verifying..."
-              << std::endl;
-
-  // Verify the license file signature
-  auto ok = verify_license_file(pubkey, lic);
-  if (ok)
-  {
-    std::cout << colorize("[OK]", 32) << " "
-              << "License file successfully verified!"
-              << std::endl;
-
-    std::cout << colorize("[INFO]", 34) << " "
-              << "Decrypting..."
-              << std::endl;
-
-    if (lic.typ == machine_type)
-    {
-      if (!getenv("KEYGEN_MACHINE_FINGERPRINT"))
-      {
-        std::cerr << colorize("[ERROR]", 31) << " "
-                  << "Environment variable KEYGEN_MACHINE_FINGERPRINT is missing"
-                  << std::endl;
-
-        return 1;
-      }
-      secret += getenv("KEYGEN_MACHINE_FINGERPRINT");
-    }
-
-    // Decrypt the license file
-    auto dec = decrypt_license_file(secret, lic);
-    if (dec.empty() || dec.at(0) != '{')
-    {
-      std::cerr << colorize("[ERROR]", 31) << " "
-                << "Failed to decrypt license file!"
-                << std::endl;
-
-      return 1;
-    }
-
-    std::cout << colorize("[OK]", 32) << " "
-              << "License file successfully decrypted!"
-              << std::endl;
-
-    std::cout << colorize("[INFO]", 34) << " "
-              << "Parsing..."
-              << std::endl;
-
-    if (lic.typ == license_type)
-    {
-      auto lcs = parse_license(dec);
-      if (is_empty<license>(lcs))
-      {
-        std::cerr << colorize("[ERROR]", 31) << " "
-                  << "Failed to parse license!"
-                  << std::endl;
-
-        return 1;
-      }
-
-      std::cout << colorize("[OK]", 32) << " "
-                << "License successfully parsed!"
-                << std::endl;
-
-      std::cout << "type=license"
-                << std::endl;
-      std::cout << "name=" << colorize(lcs.name, 34) << std::endl
-                << "key=" << colorize(lcs.key, 34) << std::endl
-                << "status=" << colorize(lcs.status, 34) << std::endl
-                << "last_validated_at=" << colorize(timetostr(lcs.last_validated_at), 34) << std::endl
-                << "expires_at=" << colorize(timetostr(lcs.expires_at), 34) << std::endl
-                << "created_at=" << colorize(timetostr(lcs.created_at), 34) << std::endl
-                << "updated_at=" << colorize(timetostr(lcs.updated_at), 34) << std::endl
-                << "entitlements=[";
-
-      for (auto i = 0; i < lcs.entitlements.size(); i++)
-      {
-        auto entitlement = lcs.entitlements.at(i);
-        std::cout << colorize(entitlement.code, 34);
-
-        if (i < lcs.entitlements.size() - 1)
-        {
-          std::cout << ",";
-        }
-      }
-
-      std::cout << "]" << std::endl
-                << "product=" << colorize(lcs.product.id, 34) << std::endl
-                << "policy=" << colorize(lcs.policy.id, 34) << std::endl
-                << "user=" << colorize(lcs.user.id, 34) << std::endl;
-    }
-    else if (lic.typ == machine_type)
-    {
-      auto mach = parse_machine(dec);
-      if (is_empty<machine>(mach))
-      {
-        std::cerr << colorize("[ERROR]", 31) << " "
-                  << "Failed to parse license!"
-                  << std::endl;
-
-        return 1;
-      }
-
-      std::cout << colorize("[OK]", 32) << " "
-                << "License successfully parsed!"
-                << std::endl;
-
-      std::cout << "type=machine"
-                << std::endl;
-      std::cout << "name=" << colorize(mach.name, 34) << std::endl;
-
-      std::cout << "lic.name=" << colorize(mach.lcs.name, 34) << std::endl
-                << "lic.key=" << colorize(mach.lcs.key, 34) << std::endl
-                << "lic.status=" << colorize(mach.lcs.status, 34) << std::endl
-                << "lic.last_validated_at=" << colorize(timetostr(mach.lcs.last_validated_at), 34) << std::endl
-                << "lic.expires_at=" << colorize(timetostr(mach.lcs.expires_at), 34) << std::endl
-                << "lic.created_at=" << colorize(timetostr(mach.lcs.created_at), 34) << std::endl
-                << "lic.updated_at=" << colorize(timetostr(mach.lcs.updated_at), 34) << std::endl
-                << "lic.entitlements=[";
-
-      for (auto i = 0; i < mach.entitlements.size(); i++)
-      {
-        auto entitlement = mach.entitlements.at(i);
-        std::cout << colorize(entitlement.code, 34);
-
-        if (i < mach.entitlements.size() - 1)
-        {
-          std::cout << ",";
-        }
-      }
-
-      std::cout << "]" << std::endl
-                << "product=" << colorize(mach.product.id, 34) << std::endl
-                << "policy=" << colorize(mach.policy.id, 34) << std::endl
-                << "user=" << colorize(mach.user.id, 34) << std::endl;
-    }
-
-    return 0;
   }
   else
   {
-    std::cerr << colorize("[ERROR]", 31) << " "
-              << "License file signature is not valid!"
+    std::cout << "Lincense validated failed!"
               << std::endl;
-
-    return 1;
   }
 }
