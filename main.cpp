@@ -61,6 +61,7 @@ int main(int argc, char* argv[])
   if (ok == 0)
   {
     std::cout << "Lincense validated successfully!"
+              << std::endl
               << json
               << std::endl;
   }
