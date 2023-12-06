@@ -356,6 +356,11 @@ std::string decrypt_license_file(const std::string key, license_file lic)
   // Convert plaintext to string
   std::string plaintext(reinterpret_cast<char const*>(plaintext_bytes));
 
+  // FIXME: Hack: remove unexpected trailing characters from string
+  auto index = plaintext.find_last_of('}');
+  if (index != std::string::npos)
+      plaintext = plaintext.substr(0, index+1);
+
   return plaintext;
 }
 
