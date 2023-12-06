@@ -41,6 +41,6 @@ $(LIB): $(OBJ_FILES)
 # Phony target to clean the project
 .PHONY: clean
 clean:
-	rm -f $(TARGET) $(OBJ_FILES)
+	rm -f $(TARGET) $(LIB) $(OBJ_FILES)
 
 
