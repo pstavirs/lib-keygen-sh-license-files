@@ -209,7 +209,7 @@ std::string decode_license_file(const std::string cert)
 
   // Decode
   auto dec = unbase64(enc.c_str(), enc.size(), &size);
-  std::string str(reinterpret_cast<char const*>(dec));
+  std::string str(dec, dec + size);
 
   return str;
 }
@@ -318,7 +318,6 @@ std::string decrypt_license_file(const std::string key, license_file lic)
 
   // Convert to bytes
   int ciphertext_size;
-  int plaintext_size;
   int iv_size;
   int tag_size;
   int aes_size;
@@ -354,12 +353,8 @@ std::string decrypt_license_file(const std::string key, license_file lic)
   EVP_CIPHER_CTX_free(ctx);
 
   // Convert plaintext to string
-  std::string plaintext(reinterpret_cast<char const*>(plaintext_bytes));
-
-  // FIXME: Hack: remove unexpected trailing characters from string
-  auto index = plaintext.find_last_of('}');
-  if (index != std::string::npos)
-      plaintext = plaintext.substr(0, index+1);
+  std::string plaintext(plaintext_bytes, plaintext_bytes + ciphertext_size);
+  delete[] plaintext_bytes;
 
   return plaintext;
 }
