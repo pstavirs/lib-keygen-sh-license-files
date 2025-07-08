@@ -1,7 +1,9 @@
 # Compiler and flags
-CC := g++
-CFLAGS := -Wall -Wextra -std=c++11
-CXXFLAGS := -std=c++11
+CC := gcc
+CXX := g++
+# TODO: Add -Wall -Wextra warnings
+CFLAGS := -O2 -fPIC $(ADD_CFLAGS)
+CXXFLAGS := -O2 -fPIC $(ADD_CXXFLAGS)
 INC_DIR := include
 
 # List of .cpp and .c files with relative paths
@@ -28,14 +30,18 @@ LIB := libkeygenlic.a
 
 # Build rule for the executable
 $(TARGET): $(LIB)
-	$(CC) $(CFLAGS) $^ -lssl -lcrypto -o $@
+	$(CXX) $^ -lssl -lcrypto -o $@
 
 # Build rule for the library
 $(LIB): $(OBJ_FILES)
 	$(AR) rcs $@ $^
 
-# Build rule for .cpp and .c files
-%.o: %.cpp %.c $(INC_DIR)/%.h
+# Build rule for .cpp files
+%.o: %.cpp $(INC_DIR)/%.h
+	$(CXX) $(CXXFLAGS) -I$(INC_DIR) -c $< -o $@
+
+# Build rule for .c files
+%.o: %.c $(INC_DIR)/%.h
 	$(CC) $(CFLAGS) -I$(INC_DIR) -c $< -o $@
 
 # Phony target to clean the project

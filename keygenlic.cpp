@@ -60,7 +60,7 @@ inline void unhex(std::string str, unsigned char* bytes)
 }
 
 // colorize adds ANSII color codes to a string.
-inline std::string colorize(const std::string str, const int color_code)
+std::string colorize(const std::string str, const int color_code)
 {
   std::stringstream stream;
 
